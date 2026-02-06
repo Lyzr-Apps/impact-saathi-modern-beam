@@ -1,742 +1,319 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
-import { useTheme } from 'next-themes'
-import { callAIAgent } from '@/lib/aiAgent'
+import { useState } from 'react'
+import Link from 'next/link'
+import Image from 'next/image'
+import Navigation from '@/components/Navigation'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
-import { ScrollArea } from '@/components/ui/scroll-area'
-import { Separator } from '@/components/ui/separator'
-import {
-  Loader2,
-  Send,
-  History,
-  Plus,
-  Trash2,
-  User,
-  Moon,
-  Sun,
-  Menu,
-  X,
-  Globe,
-  Database
-} from 'lucide-react'
-
-// Agent configuration
-const AGENT_ID = '69858ad2e17e33c11eed19f5'
-
-// TypeScript interfaces
-interface AgentResult {
-  answer: string
-  sources: string[]
-  related_topics: string[]
-  confidence: string
-  language: string
-  information_source?: 'knowledge_base' | 'web_search' | 'combined'
-}
-
-interface Message {
-  id: string
-  role: 'user' | 'assistant'
-  content: string
-  sources?: string[]
-  related_topics?: string[]
-  information_source?: string
-  timestamp: Date
-}
-
-interface ConversationMeta {
-  sessionId: string
-  title: string
-  lastUpdated: string
-  messageCount: number
-}
+import { MessageSquare, Calendar, Users, Target, BookOpen, ArrowRight, Sparkles } from 'lucide-react'
 
 type Language = 'en' | 'hi'
 
-// Markdown formatter
-function formatMarkdown(text: string) {
-  const lines = text.split('\n')
-  const elements: JSX.Element[] = []
-  let listItems: string[] = []
-  let inList = false
-
-  lines.forEach((line, index) => {
-    if (line.match(/^\d+\.\s/)) {
-      const content = line.replace(/^\d+\.\s/, '')
-      listItems.push(content)
-      inList = true
-    } else if (inList && line.trim() === '') {
-      elements.push(
-        <ol key={`list-${index}`} className="list-decimal list-inside space-y-1.5 ml-4 my-3">
-          {listItems.map((item, i) => (
-            <li key={i} className="leading-relaxed" dangerouslySetInnerHTML={{ __html: formatInlineMarkdown(item) }} />
-          ))}
-        </ol>
-      )
-      listItems = []
-      inList = false
-    } else if (inList) {
-      listItems[listItems.length - 1] += ' ' + line.trim()
-    } else if (line.trim().startsWith('**') && line.trim().endsWith('**')) {
-      const text = line.replace(/\*\*/g, '')
-      elements.push(<h3 key={index} className="font-bold text-lg mt-4 mb-2">{text}</h3>)
-    } else if (line.trim() === '') {
-      elements.push(<br key={index} />)
-    } else {
-      elements.push(
-        <p key={index} className="leading-relaxed" dangerouslySetInnerHTML={{ __html: formatInlineMarkdown(line) }} />
-      )
-    }
-  })
-
-  if (listItems.length > 0) {
-    elements.push(
-      <ol key="list-final" className="list-decimal list-inside space-y-1.5 ml-4 my-3">
-        {listItems.map((item, i) => (
-          <li key={i} className="leading-relaxed" dangerouslySetInnerHTML={{ __html: formatInlineMarkdown(item) }} />
-        ))}
-      </ol>
-    )
-  }
-
-  return <div className="space-y-2">{elements}</div>
-}
-
-function formatInlineMarkdown(text: string): string {
-  let formatted = text.replace(/\*\*(.+?)\*\*/g, '<strong class="font-semibold">$1</strong>')
-  formatted = formatted.replace(/\*(.+?)\*/g, '<em class="italic">$1</em>')
-  formatted = formatted.replace(/`(.+?)`/g, '<code class="bg-muted px-1.5 py-0.5 rounded text-sm">$1</code>')
-  return formatted
-}
-
-// Translations
 const translations = {
   en: {
-    title: 'Impact Saathi',
-    subtitle: 'Your AI Guide to India AI Impact Summit 2026',
-    placeholder: 'Ask about the summit, speakers, or IndiaAI initiatives...',
-    send: 'Send',
-    newChat: 'New Chat',
-    history: 'History',
-    welcomeTitle: 'Welcome to Impact Saathi',
-    welcomeSubtitle: 'Your intelligent guide to India AI Impact Summit 2026',
-    suggestions: [
-      'Tell me about the summit schedule',
-      'Who are the confirmed speakers?',
-      'What is the IndiaAI Mission?'
-    ],
-    basedOn: 'Sources:',
-    relatedTopics: 'Related topics:',
-    typing: 'Impact Saathi is typing',
-    noConversations: 'No previous conversations',
-    conversationHistory: 'Conversation History',
-    attendee: 'Summit Attendee',
-    messages: 'messages'
+    hero: {
+      title: 'India AI Impact Summit 2026',
+      subtitle: 'Shaping the Future of Artificial Intelligence',
+      dates: 'March 15-17, 2026 • New Delhi, India',
+      description: 'Join leaders, innovators, and visionaries in exploring how AI is transforming India and the world. Experience three days of keynotes, panels, workshops, and networking.',
+      chatCta: 'Chat with Impact Saathi',
+      learnMore: 'Learn More'
+    },
+    features: {
+      title: 'Summit Highlights',
+      chat: {
+        title: 'AI-Powered Assistant',
+        description: 'Get instant answers about the summit, speakers, schedule, and IndiaAI initiatives from Impact Saathi.'
+      },
+      schedule: {
+        title: '3-Day Schedule',
+        description: 'Comprehensive agenda with keynotes, panel discussions, workshops, and networking sessions.'
+      },
+      speakers: {
+        title: '50+ Expert Speakers',
+        description: 'Learn from global leaders in AI, government officials, industry pioneers, and research experts.'
+      },
+      indiaai: {
+        title: 'IndiaAI Mission',
+        description: 'Discover India\'s ₹10,372 Crore initiative with 7 pillars transforming AI infrastructure and adoption.'
+      },
+      initiatives: {
+        title: 'Sector AI Programs',
+        description: 'Explore AI applications in healthcare, agriculture, manufacturing, education, and smart cities.'
+      }
+    },
+    stats: {
+      attendees: '35,000+ Attendees',
+      countries: '50+ Countries',
+      speakers: '50+ Speakers',
+      sessions: '100+ Sessions'
+    },
+    cta: {
+      title: 'Ready to Explore?',
+      subtitle: 'Start your journey with Impact Saathi, your intelligent guide to the summit',
+      button: 'Start Chatting Now'
+    }
   },
   hi: {
-    title: 'इम्पैक्ट साथी',
-    subtitle: 'भारत AI इम्पैक्ट शिखर सम्मेलन 2026 के लिए आपका AI गाइड',
-    placeholder: 'सम्मेलन, वक्ताओं या IndiaAI पहलों के बारे में पूछें...',
-    send: 'भेजें',
-    newChat: 'नई चैट',
-    history: 'इतिहास',
-    welcomeTitle: 'इम्पैक्ट साथी में आपका स्वागत है',
-    welcomeSubtitle: 'भारत AI इम्पैक्ट शिखर सम्मेलन 2026 के लिए आपका बुद्धिमान मार्गदर्शक',
-    suggestions: [
-      'मुझे कार्यक्रम के बारे में बताएं',
-      'पुष्ट वक्ता कौन हैं?',
-      'IndiaAI मिशन क्या है?'
-    ],
-    basedOn: 'स्रोत:',
-    relatedTopics: 'संबंधित विषय:',
-    typing: 'इम्पैक्ट साथी टाइप कर रहा है',
-    noConversations: 'कोई पिछली बातचीत नहीं',
-    conversationHistory: 'बातचीत का इतिहास',
-    attendee: 'शिखर सम्मेलन में उपस्थित',
-    messages: 'संदेश'
+    hero: {
+      title: 'भारत AI इम्पैक्ट शिखर सम्मेलन 2026',
+      subtitle: 'कृत्रिम बुद्धिमत्ता के भविष्य को आकार देना',
+      dates: '15-17 मार्च, 2026 • नई दिल्ली, भारत',
+      description: 'नेताओं, नवप्रवर्तकों और दूरदर्शियों के साथ जुड़ें और जानें कि AI कैसे भारत और दुनिया को बदल रहा है। तीन दिनों के मुख्य भाषणों, पैनलों, कार्यशालाओं और नेटवर्किंग का अनुभव करें।',
+      chatCta: 'इम्पैक्ट साथी से चैट करें',
+      learnMore: 'और जानें'
+    },
+    features: {
+      title: 'शिखर सम्मेलन की मुख्य बातें',
+      chat: {
+        title: 'AI-संचालित सहायक',
+        description: 'इम्पैक्ट साथी से सम्मेलन, वक्ताओं, कार्यक्रम और IndiaAI पहलों के बारे में तुरंत उत्तर प्राप्त करें।'
+      },
+      schedule: {
+        title: '3-दिवसीय कार्यक्रम',
+        description: 'मुख्य भाषणों, पैनल चर्चाओं, कार्यशालाओं और नेटवर्किंग सत्रों के साथ व्यापक एजेंडा।'
+      },
+      speakers: {
+        title: '50+ विशेषज्ञ वक्ता',
+        description: 'AI में वैश्विक नेताओं, सरकारी अधिकारियों, उद्योग अग्रणियों और अनुसंधान विशेषज्ञों से सीखें।'
+      },
+      indiaai: {
+        title: 'IndiaAI मिशन',
+        description: 'भारत की ₹10,372 करोड़ की पहल को जानें जो AI बुनियादी ढांचे और अपनाने को बदल रही है।'
+      },
+      initiatives: {
+        title: 'क्षेत्र AI कार्यक्रम',
+        description: 'स्वास्थ्य, कृषि, विनिर्माण, शिक्षा और स्मार्ट शहरों में AI अनुप्रयोगों का अन्वेषण करें।'
+      }
+    },
+    stats: {
+      attendees: '35,000+ उपस्थित',
+      countries: '50+ देश',
+      speakers: '50+ वक्ता',
+      sessions: '100+ सत्र'
+    },
+    cta: {
+      title: 'अन्वेषण के लिए तैयार हैं?',
+      subtitle: 'अपनी यात्रा शुरू करें इम्पैक्ट साथी के साथ, सम्मेलन के लिए आपका बुद्धिमान मार्गदर्शक',
+      button: 'अभी चैट शुरू करें'
+    }
   }
 }
 
-export default function Home() {
+export default function LandingPage() {
   const [language, setLanguage] = useState<Language>('en')
-  const [messages, setMessages] = useState<Message[]>([])
-  const [input, setInput] = useState('')
-  const [isLoading, setIsLoading] = useState(false)
-  const [userId, setUserId] = useState('')
-  const [sessionId, setSessionId] = useState(() => `session-${Date.now()}`)
-  const [showHistory, setShowHistory] = useState(false)
-  const [conversations, setConversations] = useState<ConversationMeta[]>([])
-  const [mounted, setMounted] = useState(false)
-  const messagesEndRef = useRef<HTMLDivElement>(null)
-  const inputRef = useRef<HTMLInputElement>(null)
-  const { theme, setTheme } = useTheme()
-
   const t = translations[language]
-
-  useEffect(() => {
-    setMounted(true)
-  }, [])
-
-  // Load conversations list
-  const loadConversations = () => {
-    const conversationList = localStorage.getItem('impact_saathi_conversations')
-    if (conversationList) {
-      try {
-        setConversations(JSON.parse(conversationList))
-      } catch (e) {
-        console.error('Failed to load conversations:', e)
-      }
-    }
-  }
-
-  // Save conversation metadata
-  const saveConversationMeta = (sid: string, msgCount: number, firstMessage?: string) => {
-    const conversationList = localStorage.getItem('impact_saathi_conversations')
-    let convos: ConversationMeta[] = conversationList ? JSON.parse(conversationList) : []
-
-    const existingIndex = convos.findIndex(c => c.sessionId === sid)
-    const title = firstMessage?.substring(0, 50) || 'New Conversation'
-
-    const meta: ConversationMeta = {
-      sessionId: sid,
-      title,
-      lastUpdated: new Date().toISOString(),
-      messageCount: msgCount
-    }
-
-    if (existingIndex >= 0) {
-      convos[existingIndex] = meta
-    } else {
-      convos.unshift(meta)
-    }
-
-    convos = convos.slice(0, 50)
-    localStorage.setItem('impact_saathi_conversations', JSON.stringify(convos))
-    setConversations(convos)
-  }
-
-  // Load a specific conversation
-  const loadConversation = (sid: string) => {
-    const savedMessages = localStorage.getItem(`impact_saathi_chat_${sid}`)
-    if (savedMessages) {
-      try {
-        const parsed = JSON.parse(savedMessages)
-        setMessages(parsed.map((msg: any) => ({
-          ...msg,
-          timestamp: new Date(msg.timestamp)
-        })))
-        setSessionId(sid)
-        setShowHistory(false)
-      } catch (e) {
-        console.error('Failed to load conversation:', e)
-      }
-    }
-  }
-
-  // Delete a conversation
-  const deleteConversation = (sid: string) => {
-    localStorage.removeItem(`impact_saathi_chat_${sid}`)
-    const conversationList = localStorage.getItem('impact_saathi_conversations')
-    if (conversationList) {
-      const convos: ConversationMeta[] = JSON.parse(conversationList)
-      const filtered = convos.filter(c => c.sessionId !== sid)
-      localStorage.setItem('impact_saathi_conversations', JSON.stringify(filtered))
-      setConversations(filtered)
-    }
-    if (sid === sessionId) {
-      startNewConversation()
-    }
-  }
-
-  // Start new conversation
-  const startNewConversation = () => {
-    const newSessionId = `session-${Date.now()}`
-    setSessionId(newSessionId)
-    setMessages([])
-    setShowHistory(false)
-  }
-
-  // Initialize user and load preferences
-  useEffect(() => {
-    let storedUserId = localStorage.getItem('impact_saathi_user_id')
-    if (!storedUserId) {
-      storedUserId = `user-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
-      localStorage.setItem('impact_saathi_user_id', storedUserId)
-    }
-    setUserId(storedUserId)
-
-    const savedLanguage = localStorage.getItem('impact_saathi_language') as Language | null
-    if (savedLanguage && (savedLanguage === 'en' || savedLanguage === 'hi')) {
-      setLanguage(savedLanguage)
-    }
-
-    loadConversations()
-
-    const savedMessages = localStorage.getItem(`impact_saathi_chat_${sessionId}`)
-    if (savedMessages) {
-      try {
-        const parsed = JSON.parse(savedMessages)
-        setMessages(parsed.map((msg: any) => ({
-          ...msg,
-          timestamp: new Date(msg.timestamp)
-        })))
-      } catch (e) {
-        console.error('Failed to load chat history:', e)
-      }
-    }
-  }, [sessionId])
-
-  // Save chat history
-  useEffect(() => {
-    if (messages.length > 0) {
-      localStorage.setItem(`impact_saathi_chat_${sessionId}`, JSON.stringify(messages))
-      const firstUserMessage = messages.find(m => m.role === 'user')?.content
-      saveConversationMeta(sessionId, messages.length, firstUserMessage)
-    }
-  }, [messages, sessionId])
-
-  // Save language preference
-  useEffect(() => {
-    localStorage.setItem('impact_saathi_language', language)
-  }, [language])
-
-  // Auto-scroll
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages, isLoading])
-
-  // Focus input
-  useEffect(() => {
-    inputRef.current?.focus()
-  }, [])
-
-  const handleSendMessage = async (messageText?: string) => {
-    const text = messageText || input.trim()
-    if (!text || isLoading || !userId) return
-
-    setInput('')
-
-    const languageInstruction = language === 'hi'
-      ? '\n\n[Please respond in Hindi language]'
-      : ''
-    const messageWithLanguage = text + languageInstruction
-
-    const userMessage: Message = {
-      id: `user-${Date.now()}`,
-      role: 'user',
-      content: text,
-      timestamp: new Date()
-    }
-    setMessages(prev => [...prev, userMessage])
-    setIsLoading(true)
-
-    try {
-      const result = await callAIAgent(messageWithLanguage, AGENT_ID, {
-        user_id: userId,
-        session_id: sessionId
-      })
-
-      if (result.success && result.response.status === 'success') {
-        const agentResult = result.response.result as AgentResult
-
-        const assistantMessage: Message = {
-          id: `assistant-${Date.now()}`,
-          role: 'assistant',
-          content: agentResult.answer || 'No response available',
-          sources: agentResult.sources || [],
-          related_topics: agentResult.related_topics || [],
-          information_source: agentResult.information_source,
-          timestamp: new Date()
-        }
-        setMessages(prev => [...prev, assistantMessage])
-      } else {
-        const errorMessage: Message = {
-          id: `assistant-${Date.now()}`,
-          role: 'assistant',
-          content: 'I apologize, but I encountered an error. Please try again.',
-          timestamp: new Date()
-        }
-        setMessages(prev => [...prev, errorMessage])
-      }
-    } catch (error) {
-      const errorMessage: Message = {
-        id: `assistant-${Date.now()}`,
-        role: 'assistant',
-        content: 'I apologize, but I encountered a network error. Please try again.',
-        timestamp: new Date()
-      }
-      setMessages(prev => [...prev, errorMessage])
-    } finally {
-      setIsLoading(false)
-      inputRef.current?.focus()
-    }
-  }
-
-  const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault()
-      handleSendMessage()
-    }
-  }
 
   const toggleLanguage = () => {
     setLanguage(prev => prev === 'en' ? 'hi' : 'en')
   }
 
-  const formatTime = (date: Date) => {
-    return date.toLocaleTimeString('en-US', {
-      hour: '2-digit',
-      minute: '2-digit'
-    })
-  }
+  const features = [
+    {
+      icon: MessageSquare,
+      title: t.features.chat.title,
+      description: t.features.chat.description,
+      href: '/chat',
+      color: 'orange'
+    },
+    {
+      icon: Calendar,
+      title: t.features.schedule.title,
+      description: t.features.schedule.description,
+      href: '/schedule',
+      color: 'blue'
+    },
+    {
+      icon: Users,
+      title: t.features.speakers.title,
+      description: t.features.speakers.description,
+      href: '/speakers',
+      color: 'green'
+    },
+    {
+      icon: Target,
+      title: t.features.indiaai.title,
+      description: t.features.indiaai.description,
+      href: '/indiaai',
+      color: 'purple'
+    },
+    {
+      icon: BookOpen,
+      title: t.features.initiatives.title,
+      description: t.features.initiatives.description,
+      href: '/initiatives',
+      color: 'pink'
+    }
+  ]
 
-  if (!mounted) return null
+  const stats = [
+    { value: t.stats.attendees, label: language === 'en' ? 'Expected' : 'अपेक्षित' },
+    { value: t.stats.countries, label: language === 'en' ? 'Represented' : 'प्रतिनिधित्व' },
+    { value: t.stats.speakers, label: language === 'en' ? 'Industry Experts' : 'उद्योग विशेषज्ञ' },
+    { value: t.stats.sessions, label: language === 'en' ? 'Learning Sessions' : 'सीखने के सत्र' }
+  ]
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
-      {/* Fixed Header */}
-      <header className="sticky top-0 z-10 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="container max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex h-16 items-center justify-between gap-4">
-            {/* Left Section */}
-            <div className="flex items-center gap-2 sm:gap-3">
-              {/* Mobile History Toggle */}
-              <Button
-                onClick={() => setShowHistory(!showHistory)}
-                variant="ghost"
-                size="icon"
-                className="lg:hidden"
-              >
-                {showHistory ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-              </Button>
+      <Navigation language={language} onLanguageToggle={toggleLanguage} />
 
-              {/* Desktop History Toggle */}
-              <Button
-                onClick={() => setShowHistory(!showHistory)}
-                variant="ghost"
-                size="icon"
-                className="hidden lg:flex"
-              >
-                <History className="h-5 w-5" />
-              </Button>
+      <main className="flex-1">
+        {/* Hero Section with Banner */}
+        <div className="relative">
+          <div className="absolute inset-0 z-0">
+            <Image
+              src="/images/banner.jpg"
+              alt="India AI Impact Summit 2026"
+              fill
+              className="object-cover opacity-20 dark:opacity-10"
+              priority
+            />
+            <div className="absolute inset-0 bg-gradient-to-b from-transparent via-background/50 to-background"></div>
+          </div>
 
-              {/* Logo and Title */}
-              <div className="flex items-center gap-2 sm:gap-3">
-                <div className="w-10 h-10 bg-gradient-to-br from-orange-500 to-orange-600 dark:from-orange-600 dark:to-orange-700 rounded-lg flex items-center justify-center shadow-lg">
-                  <span className="text-white font-bold text-xl">IS</span>
-                </div>
-                <div className="hidden sm:block">
-                  <h1 className="text-lg sm:text-xl font-bold text-foreground">{t.title}</h1>
-                  <p className="text-xs text-muted-foreground hidden md:block">{t.subtitle}</p>
-                </div>
+          <div className="relative z-10 container max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 sm:py-24 lg:py-32">
+            <div className="max-w-4xl mx-auto text-center">
+              {/* Title */}
+              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300 mb-6">
+                <Sparkles className="w-4 h-4" />
+                <span className="text-sm font-semibold">
+                  {language === 'en' ? 'Powered by AI' : 'AI द्वारा संचालित'}
+                </span>
               </div>
-            </div>
 
-            {/* Right Section */}
-            <div className="flex items-center gap-1 sm:gap-2">
-              {/* New Chat */}
-              <Button
-                onClick={startNewConversation}
-                variant="ghost"
-                size="icon"
-                className="hidden sm:flex"
-              >
-                <Plus className="h-5 w-5" />
-              </Button>
+              <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-foreground mb-4">
+                {t.hero.title}
+              </h1>
 
-              {/* Language Toggle */}
-              <Button
-                onClick={toggleLanguage}
-                variant="outline"
-                size="sm"
-                className="font-semibold"
-              >
-                {language === 'en' ? 'हिं' : 'EN'}
-              </Button>
+              <p className="text-xl sm:text-2xl text-orange-600 dark:text-orange-400 font-semibold mb-6">
+                {t.hero.subtitle}
+              </p>
 
-              {/* Theme Toggle */}
-              <Button
-                onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-                variant="ghost"
-                size="icon"
-              >
-                {theme === 'dark' ? (
-                  <Sun className="h-5 w-5" />
-                ) : (
-                  <Moon className="h-5 w-5" />
-                )}
-              </Button>
+              <p className="text-lg text-muted-foreground mb-8">
+                {t.hero.dates}
+              </p>
+
+              <p className="text-base sm:text-lg text-muted-foreground max-w-3xl mx-auto mb-10">
+                {t.hero.description}
+              </p>
+
+              {/* CTA Buttons */}
+              <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
+                <Link href="/chat">
+                  <Button
+                    size="lg"
+                    className="bg-orange-500 hover:bg-orange-600 text-white text-lg px-8 py-6 h-auto"
+                  >
+                    <MessageSquare className="w-5 h-5 mr-2" />
+                    {t.hero.chatCta}
+                  </Button>
+                </Link>
+                <Link href="/about">
+                  <Button
+                    size="lg"
+                    variant="outline"
+                    className="border-orange-500 text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-950 text-lg px-8 py-6 h-auto"
+                  >
+                    {t.hero.learnMore}
+                    <ArrowRight className="w-5 h-5 ml-2" />
+                  </Button>
+                </Link>
+              </div>
             </div>
           </div>
         </div>
-      </header>
 
-      <div className="flex flex-1 overflow-hidden">
-        {/* History Sidebar */}
-        {showHistory && (
-          <aside className="w-full lg:w-80 border-r bg-background overflow-hidden flex flex-col absolute lg:relative inset-0 z-20 lg:z-0">
-            <ScrollArea className="flex-1">
-              <div className="p-4 space-y-4">
-                {/* User Profile */}
-                <Card>
-                  <CardContent className="p-4">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-gradient-to-br from-orange-500 to-orange-600 dark:from-orange-600 dark:to-orange-700 rounded-full flex items-center justify-center">
-                        <User className="w-5 h-5 text-white" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-semibold">{t.attendee}</p>
-                        <p className="text-xs text-muted-foreground truncate">
-                          ID: {userId.substring(0, 20)}...
-                        </p>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                <Separator />
-
-                {/* Conversation History */}
-                <div>
-                  <h2 className="text-lg font-bold mb-3">{t.conversationHistory}</h2>
-                  {conversations.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">{t.noConversations}</p>
-                  ) : (
-                    <div className="space-y-2">
-                      {conversations.map((conv) => (
-                        <Card
-                          key={conv.sessionId}
-                          className={`cursor-pointer transition-colors hover:bg-accent ${
-                            conv.sessionId === sessionId ? 'border-orange-500 bg-accent' : ''
-                          }`}
-                        >
-                          <CardContent className="p-3">
-                            <div className="flex items-start justify-between gap-2">
-                              <div
-                                onClick={() => loadConversation(conv.sessionId)}
-                                className="flex-1 min-w-0"
-                              >
-                                <p className="text-sm font-medium truncate">
-                                  {conv.title}
-                                </p>
-                                <p className="text-xs text-muted-foreground mt-1">
-                                  {conv.messageCount} {t.messages} • {new Date(conv.lastUpdated).toLocaleDateString()}
-                                </p>
-                              </div>
-                              <Button
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  deleteConversation(conv.sessionId)
-                                }}
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8 text-destructive hover:bg-destructive/10"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </Button>
-                            </div>
-                          </CardContent>
-                        </Card>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-            </ScrollArea>
-          </aside>
-        )}
-
-        {/* Main Chat Area */}
-        <main className="flex-1 flex flex-col overflow-hidden">
-          <ScrollArea className="flex-1 px-4 py-6">
-            <div className="container max-w-4xl mx-auto space-y-6">
-              {/* Welcome Card */}
-              {messages.length === 0 && (
-                <Card className="border-orange-500/50">
-                  <CardContent className="p-6 sm:p-8">
-                    <div className="text-center mb-6">
-                      <h2 className="text-2xl sm:text-3xl font-bold mb-2">
-                        {t.welcomeTitle}
-                      </h2>
-                      <p className="text-muted-foreground">
-                        {t.welcomeSubtitle}
-                      </p>
-                    </div>
-
-                    <div className="grid gap-3">
-                      {t.suggestions.map((suggestion, index) => (
-                        <button
-                          key={index}
-                          onClick={() => handleSendMessage(suggestion)}
-                          className="w-full text-left px-4 py-3 rounded-lg border border-border hover:border-orange-500 hover:bg-accent transition-all font-medium text-sm sm:text-base"
-                          disabled={isLoading}
-                        >
-                          {suggestion}
-                        </button>
-                      ))}
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
-
-              {/* Messages */}
-              {messages.map((message) => (
-                <div
-                  key={message.id}
-                  className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
-                >
-                  <div className={`max-w-[90%] sm:max-w-[85%] ${message.role === 'user' ? 'ml-auto' : 'mr-auto'}`}>
-                    {message.role === 'user' ? (
-                      <div className="bg-primary text-primary-foreground rounded-2xl rounded-tr-sm px-4 sm:px-5 py-3 shadow-md">
-                        <p className="whitespace-pre-wrap break-words text-sm sm:text-base">
-                          {message.content}
-                        </p>
-                        <p className="text-xs mt-1 opacity-75">
-                          {formatTime(message.timestamp)}
-                        </p>
-                      </div>
-                    ) : (
-                      <Card>
-                        <CardContent className="p-4 sm:p-5">
-                          <div className="break-words text-sm sm:text-base">
-                            {formatMarkdown(message.content)}
-                          </div>
-
-                          {/* Information Source Badge */}
-                          {message.information_source && (
-                            <div className="mt-3 flex items-center gap-2 text-xs">
-                              {message.information_source === 'web_search' && (
-                                <span className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-full">
-                                  <Globe className="w-3 h-3" />
-                                  Web Search
-                                </span>
-                              )}
-                              {message.information_source === 'knowledge_base' && (
-                                <span className="inline-flex items-center gap-1 px-2 py-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 rounded-full">
-                                  <Database className="w-3 h-3" />
-                                  Knowledge Base
-                                </span>
-                              )}
-                              {message.information_source === 'combined' && (
-                                <>
-                                  <span className="inline-flex items-center gap-1 px-2 py-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 rounded-full">
-                                    <Database className="w-3 h-3" />
-                                    KB
-                                  </span>
-                                  <span className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-full">
-                                    <Globe className="w-3 h-3" />
-                                    Web
-                                  </span>
-                                </>
-                              )}
-                            </div>
-                          )}
-
-                          {/* Sources */}
-                          {message.sources && message.sources.length > 0 && (
-                            <div className="mt-4 pt-3 border-t">
-                              <p className="text-xs font-semibold text-muted-foreground mb-2">
-                                {t.basedOn}
-                              </p>
-                              <div className="flex flex-wrap gap-2">
-                                {message.sources.map((source, idx) => (
-                                  <span
-                                    key={idx}
-                                    className="text-xs px-2 py-1 bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300 rounded border border-orange-200 dark:border-orange-800"
-                                  >
-                                    {source}
-                                  </span>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-
-                          {/* Related Topics */}
-                          {message.related_topics && message.related_topics.length > 0 && (
-                            <div className="mt-4">
-                              <p className="text-xs font-semibold text-muted-foreground mb-2">
-                                {t.relatedTopics}
-                              </p>
-                              <div className="flex flex-wrap gap-2">
-                                {message.related_topics.map((topic, idx) => (
-                                  <button
-                                    key={idx}
-                                    onClick={() => handleSendMessage(topic)}
-                                    disabled={isLoading}
-                                    className="text-sm px-3 py-1.5 border border-orange-500 text-orange-600 dark:text-orange-400 rounded-full hover:bg-orange-500 hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                  >
-                                    {topic}
-                                  </button>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-
-                          <p className="text-xs text-muted-foreground mt-3">
-                            {formatTime(message.timestamp)}
-                          </p>
-                        </CardContent>
-                      </Card>
-                    )}
-                  </div>
+        {/* Stats Section */}
+        <div className="border-y bg-gradient-to-r from-orange-500/5 to-orange-600/5">
+          <div className="container max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-8">
+              {stats.map((stat, index) => (
+                <div key={index} className="text-center">
+                  <p className="text-3xl sm:text-4xl font-bold text-orange-600 dark:text-orange-400 mb-2">
+                    {stat.value}
+                  </p>
+                  <p className="text-sm sm:text-base text-muted-foreground">
+                    {stat.label}
+                  </p>
                 </div>
               ))}
+            </div>
+          </div>
+        </div>
 
-              {/* Typing Indicator */}
-              {isLoading && (
-                <div className="flex justify-start">
-                  <Card className="max-w-[85%]">
-                    <CardContent className="p-4 sm:p-5">
-                      <div className="flex items-center gap-2 text-muted-foreground">
-                        <div className="flex gap-1">
-                          <span className="w-2 h-2 bg-orange-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></span>
-                          <span className="w-2 h-2 bg-orange-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></span>
-                          <span className="w-2 h-2 bg-orange-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></span>
-                        </div>
-                        <span className="text-sm">{t.typing}</span>
+        {/* Features Section */}
+        <div className="container max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 sm:py-20">
+          <div className="text-center mb-12">
+            <h2 className="text-3xl sm:text-4xl font-bold text-foreground mb-4">
+              {t.features.title}
+            </h2>
+          </div>
+
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {features.map((feature, index) => {
+              const Icon = feature.icon
+              return (
+                <Link key={index} href={feature.href}>
+                  <Card className="h-full hover:border-orange-500 transition-all hover:shadow-lg cursor-pointer group">
+                    <CardContent className="p-6">
+                      <div className="w-12 h-12 rounded-lg bg-orange-500/10 flex items-center justify-center mb-4 group-hover:bg-orange-500/20 transition-colors">
+                        <Icon className="w-6 h-6 text-orange-500" />
+                      </div>
+                      <h3 className="text-xl font-bold text-foreground mb-3">
+                        {feature.title}
+                      </h3>
+                      <p className="text-sm text-muted-foreground leading-relaxed">
+                        {feature.description}
+                      </p>
+                      <div className="flex items-center text-orange-600 dark:text-orange-400 mt-4 font-semibold text-sm group-hover:gap-2 transition-all">
+                        <span>{language === 'en' ? 'Explore' : 'अन्वेषण करें'}</span>
+                        <ArrowRight className="w-4 h-4 ml-1 group-hover:ml-2 transition-all" />
                       </div>
                     </CardContent>
                   </Card>
-                </div>
-              )}
+                </Link>
+              )
+            })}
+          </div>
+        </div>
 
-              <div ref={messagesEndRef} />
-            </div>
-          </ScrollArea>
-
-          {/* Input Footer */}
-          <div className="border-t bg-background p-4">
-            <div className="container max-w-4xl mx-auto">
-              <div className="flex gap-2">
-                <Input
-                  ref={inputRef}
-                  type="text"
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  onKeyPress={handleKeyPress}
-                  placeholder={t.placeholder}
-                  disabled={isLoading}
-                  className="flex-1"
-                />
+        {/* Final CTA Section */}
+        <div className="border-t bg-gradient-to-r from-orange-500/10 to-orange-600/10">
+          <div className="container max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 sm:py-20">
+            <div className="max-w-3xl mx-auto text-center">
+              <h2 className="text-3xl sm:text-4xl font-bold text-foreground mb-4">
+                {t.cta.title}
+              </h2>
+              <p className="text-lg text-muted-foreground mb-8">
+                {t.cta.subtitle}
+              </p>
+              <Link href="/chat">
                 <Button
-                  onClick={() => handleSendMessage()}
-                  disabled={!input.trim() || isLoading}
-                  className="bg-orange-500 hover:bg-orange-600 text-white px-4 sm:px-6"
+                  size="lg"
+                  className="bg-orange-500 hover:bg-orange-600 text-white text-lg px-10 py-6 h-auto"
                 >
-                  {isLoading ? (
-                    <Loader2 className="w-5 h-5 animate-spin" />
-                  ) : (
-                    <Send className="w-5 h-5" />
-                  )}
-                  <span className="ml-2 hidden sm:inline">{t.send}</span>
+                  <MessageSquare className="w-5 h-5 mr-2" />
+                  {t.cta.button}
                 </Button>
-              </div>
+              </Link>
             </div>
           </div>
-        </main>
-      </div>
+        </div>
+      </main>
+
+      {/* Footer */}
+      <footer className="border-t bg-background">
+        <div className="container max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="text-center text-sm text-muted-foreground">
+            <p>
+              {language === 'en'
+                ? '© 2026 India AI Impact Summit. All rights reserved.'
+                : '© 2026 भारत AI इम्पैक्ट शिखर सम्मेलन। सर्वाधिकार सुरक्षित।'}
+            </p>
+          </div>
+        </div>
+      </footer>
     </div>
   )
 }
