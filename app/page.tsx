@@ -5,7 +5,7 @@ import { callAIAgent } from '@/lib/aiAgent'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
-import { Loader2, Send } from 'lucide-react'
+import { Loader2, Send, History, Plus, Trash2, User } from 'lucide-react'
 
 // Agent configuration
 const AGENT_ID = '69858ad2e17e33c11eed19f5'
@@ -132,16 +132,158 @@ const translations = {
   }
 }
 
+// Conversation metadata interface
+interface ConversationMeta {
+  sessionId: string
+  title: string
+  lastUpdated: string
+  messageCount: number
+}
+
 export default function Home() {
   const [language, setLanguage] = useState<Language>('en')
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
-  const [sessionId] = useState(() => `session-${Date.now()}`)
+  const [userId, setUserId] = useState('')
+  const [sessionId, setSessionId] = useState(() => `session-${Date.now()}`)
+  const [showHistory, setShowHistory] = useState(false)
+  const [conversations, setConversations] = useState<ConversationMeta[]>([])
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
   const t = translations[language]
+
+  // Load conversations list
+  const loadConversations = () => {
+    const conversationList = localStorage.getItem('impact_saathi_conversations')
+    if (conversationList) {
+      try {
+        setConversations(JSON.parse(conversationList))
+      } catch (e) {
+        console.error('Failed to load conversations:', e)
+      }
+    }
+  }
+
+  // Save conversation metadata
+  const saveConversationMeta = (sid: string, msgCount: number, firstMessage?: string) => {
+    const conversationList = localStorage.getItem('impact_saathi_conversations')
+    let convos: ConversationMeta[] = conversationList ? JSON.parse(conversationList) : []
+
+    const existingIndex = convos.findIndex(c => c.sessionId === sid)
+    const title = firstMessage?.substring(0, 50) || 'New Conversation'
+
+    const meta: ConversationMeta = {
+      sessionId: sid,
+      title,
+      lastUpdated: new Date().toISOString(),
+      messageCount: msgCount
+    }
+
+    if (existingIndex >= 0) {
+      convos[existingIndex] = meta
+    } else {
+      convos.unshift(meta)
+    }
+
+    // Keep only last 50 conversations
+    convos = convos.slice(0, 50)
+
+    localStorage.setItem('impact_saathi_conversations', JSON.stringify(convos))
+    setConversations(convos)
+  }
+
+  // Load a specific conversation
+  const loadConversation = (sid: string) => {
+    const savedMessages = localStorage.getItem(`impact_saathi_chat_${sid}`)
+    if (savedMessages) {
+      try {
+        const parsed = JSON.parse(savedMessages)
+        setMessages(parsed.map((msg: any) => ({
+          ...msg,
+          timestamp: new Date(msg.timestamp)
+        })))
+        setSessionId(sid)
+        setShowHistory(false)
+      } catch (e) {
+        console.error('Failed to load conversation:', e)
+      }
+    }
+  }
+
+  // Delete a conversation
+  const deleteConversation = (sid: string) => {
+    localStorage.removeItem(`impact_saathi_chat_${sid}`)
+    const conversationList = localStorage.getItem('impact_saathi_conversations')
+    if (conversationList) {
+      const convos: ConversationMeta[] = JSON.parse(conversationList)
+      const filtered = convos.filter(c => c.sessionId !== sid)
+      localStorage.setItem('impact_saathi_conversations', JSON.stringify(filtered))
+      setConversations(filtered)
+    }
+    if (sid === sessionId) {
+      startNewConversation()
+    }
+  }
+
+  // Start new conversation
+  const startNewConversation = () => {
+    const newSessionId = `session-${Date.now()}`
+    setSessionId(newSessionId)
+    setMessages([])
+    setShowHistory(false)
+  }
+
+  // Initialize user and load preferences on mount
+  useEffect(() => {
+    // Get or create user ID
+    let storedUserId = localStorage.getItem('impact_saathi_user_id')
+    if (!storedUserId) {
+      storedUserId = `user-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+      localStorage.setItem('impact_saathi_user_id', storedUserId)
+    }
+    setUserId(storedUserId)
+
+    // Load saved language preference
+    const savedLanguage = localStorage.getItem('impact_saathi_language') as Language | null
+    if (savedLanguage && (savedLanguage === 'en' || savedLanguage === 'hi')) {
+      setLanguage(savedLanguage)
+    }
+
+    // Load conversations list
+    loadConversations()
+
+    // Load chat history for this session
+    const savedMessages = localStorage.getItem(`impact_saathi_chat_${sessionId}`)
+    if (savedMessages) {
+      try {
+        const parsed = JSON.parse(savedMessages)
+        setMessages(parsed.map((msg: any) => ({
+          ...msg,
+          timestamp: new Date(msg.timestamp)
+        })))
+      } catch (e) {
+        console.error('Failed to load chat history:', e)
+      }
+    }
+  }, [sessionId])
+
+  // Save chat history whenever messages change
+  useEffect(() => {
+    if (messages.length > 0) {
+      localStorage.setItem(`impact_saathi_chat_${sessionId}`, JSON.stringify(messages))
+
+      // Save conversation metadata
+      const firstUserMessage = messages.find(m => m.role === 'user')?.content
+      saveConversationMeta(sessionId, messages.length, firstUserMessage)
+    }
+  }, [messages, sessionId])
+
+  // Save language preference when changed
+  useEffect(() => {
+    localStorage.setItem('impact_saathi_language', language)
+  }, [language])
 
   // Auto-scroll to latest message
   useEffect(() => {
@@ -155,12 +297,18 @@ export default function Home() {
 
   const handleSendMessage = async (messageText?: string) => {
     const text = messageText || input.trim()
-    if (!text || isLoading) return
+    if (!text || isLoading || !userId) return
 
     // Clear input
     setInput('')
 
-    // Add user message
+    // Add language instruction to message if Hindi is selected
+    const languageInstruction = language === 'hi'
+      ? '\n\n[Please respond in Hindi language]'
+      : ''
+    const messageWithLanguage = text + languageInstruction
+
+    // Add user message (display original text without instruction)
     const userMessage: Message = {
       id: `user-${Date.now()}`,
       role: 'user',
@@ -171,8 +319,11 @@ export default function Home() {
     setIsLoading(true)
 
     try {
-      // Call agent
-      const result = await callAIAgent(text, AGENT_ID, { session_id: sessionId })
+      // Call agent with user_id and session_id
+      const result = await callAIAgent(messageWithLanguage, AGENT_ID, {
+        user_id: userId,
+        session_id: sessionId
+      })
 
       if (result.success && result.response.status === 'success') {
         const agentResult = result.response.result as AgentResult
@@ -236,23 +387,106 @@ export default function Home() {
       <header className="fixed top-0 left-0 right-0 z-10 bg-white border-b border-gray-200 shadow-sm">
         <div className="max-w-4xl mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
+            {/* History Toggle */}
+            <Button
+              onClick={() => setShowHistory(!showHistory)}
+              variant="ghost"
+              size="sm"
+              className="text-[#000080] hover:bg-orange-50"
+            >
+              <History className="w-5 h-5" />
+            </Button>
+
             <div className="w-10 h-10 bg-gradient-to-br from-[#FF9933] to-[#FF6600] rounded-lg flex items-center justify-center">
               <span className="text-white font-bold text-xl">IS</span>
             </div>
             <h1 className="text-2xl font-bold text-[#000080]">{t.title}</h1>
           </div>
 
-          {/* Language Toggle */}
-          <Button
-            onClick={toggleLanguage}
-            variant="outline"
-            size="sm"
-            className="font-semibold border-[#FF9933] text-[#000080] hover:bg-[#FF9933] hover:text-white transition-colors"
-          >
-            {language === 'en' ? 'हिं' : 'EN'}
-          </Button>
+          <div className="flex items-center gap-2">
+            {/* New Chat Button */}
+            <Button
+              onClick={startNewConversation}
+              variant="ghost"
+              size="sm"
+              className="text-[#000080] hover:bg-orange-50"
+            >
+              <Plus className="w-5 h-5" />
+            </Button>
+
+            {/* Language Toggle */}
+            <Button
+              onClick={toggleLanguage}
+              variant="outline"
+              size="sm"
+              className="font-semibold border-[#FF9933] text-[#000080] hover:bg-[#FF9933] hover:text-white transition-colors"
+            >
+              {language === 'en' ? 'हिं' : 'EN'}
+            </Button>
+          </div>
         </div>
       </header>
+
+      {/* History Sidebar */}
+      {showHistory && (
+        <div className="fixed top-16 left-0 bottom-0 w-80 bg-white border-r border-gray-200 shadow-lg z-20 overflow-y-auto">
+          <div className="p-4">
+            {/* User Profile Info */}
+            <div className="mb-6 pb-4 border-b border-gray-200">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-gradient-to-br from-[#FF9933] to-[#FF6600] rounded-full flex items-center justify-center">
+                  <User className="w-5 h-5 text-white" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-[#000080]">Summit Attendee</p>
+                  <p className="text-xs text-gray-500 truncate">ID: {userId.substring(0, 20)}...</p>
+                </div>
+              </div>
+            </div>
+
+            <h2 className="text-lg font-bold text-[#000080] mb-4">Conversation History</h2>
+            {conversations.length === 0 ? (
+              <p className="text-gray-500 text-sm">No previous conversations</p>
+            ) : (
+              <div className="space-y-2">
+                {conversations.map((conv) => (
+                  <div
+                    key={conv.sessionId}
+                    className={`p-3 rounded-lg border cursor-pointer hover:bg-orange-50 transition-colors ${
+                      conv.sessionId === sessionId ? 'border-[#FF9933] bg-orange-50' : 'border-gray-200'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div
+                        onClick={() => loadConversation(conv.sessionId)}
+                        className="flex-1 min-w-0"
+                      >
+                        <p className="text-sm font-medium text-[#000080] truncate">
+                          {conv.title}
+                        </p>
+                        <p className="text-xs text-gray-500 mt-1">
+                          {conv.messageCount} messages • {new Date(conv.lastUpdated).toLocaleDateString()}
+                        </p>
+                      </div>
+                      <Button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          deleteConversation(conv.sessionId)
+                        }}
+                        variant="ghost"
+                        size="sm"
+                        className="text-red-500 hover:bg-red-50 p-1 h-auto"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Main Chat Area */}
       <main className="flex-1 mt-16 mb-24 overflow-y-auto">
