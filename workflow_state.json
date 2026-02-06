@@ -1,0 +1,33 @@
+{
+  "workflow_name": "Impact Saathi Agent System",
+  "created_at": "2026-02-06T00:00:00Z",
+  "agent_ids": {
+    "impact_saathi_agent": "69858ad2e17e33c11eed19f5"
+  },
+  "knowledge_bases": {
+    "impact_saathi_summit_kb": {
+      "rag_id": "69858abede7de278e55d2856",
+      "rag_name": "impactsaathisummitkbc7bl",
+      "collection_name": "impactsaathisummitkbc7bl"
+    }
+  },
+  "workflow_pattern": "single_agent",
+  "agents": [
+    {
+      "name": "Impact Saathi Agent",
+      "agent_id": "69858ad2e17e33c11eed19f5",
+      "type": "single",
+      "model": "gpt-4o",
+      "provider": "OpenAI",
+      "temperature": 0.3,
+      "top_p": 0.9,
+      "has_knowledge_base": true,
+      "rag_id": "69858abede7de278e55d2856",
+      "tools": [
+        "KNOWLEDGE_BASE",
+        "COMPOSIO_SEARCH_PERPLEXITY_AI_SEARCH"
+      ],
+      "response_schema": "response_schemas/impact_saathi_agent_response.json"
+    }
+  ]
+}

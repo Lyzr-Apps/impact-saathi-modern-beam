@@ -1,0 +1,31 @@
+{
+  "agent_name": "Impact Saathi Agent",
+  "agent_id": "69858ad2e17e33c11eed19f5",
+  "test_message": "What funding opportunities are available for startups?",
+  "expected_purpose": "Summit navigator for India AI Impact Summit 2026",
+  "timestamp": "2026-02-06T06:33:13.133329",
+  "is_valid_json": true,
+  "validation_errors": [],
+  "actual_response": {
+    "status": "success",
+    "result": {
+      "answer": "At the India AI Impact Summit 2026, several funding opportunities are available for startups focused on artificial intelligence and related technologies. Startups can explore initiatives under the IndiaAI Mission that focus on innovation and technological advancement. The government has allocated significant funds for AI research and development, which includes grants, seed funding, and partnerships with industry leaders.\n\nAdditionally, there are specific programs and competitions like hackathons, accelerators, and incubators organized by state and central government departments aimed at fostering AI innovation. Startups may also find opportunities through collaborations with tech giants and investors present at the summit. \n\nIt is advisable for startups to check the detailed announcements made during the summit and keep an eye on the official website https://impact.indiaai.gov.in for the latest funding opportunities and application processes.",
+      "sources": [
+        "Summit Schedule Documentation",
+        "IndiaAI Mission Initiatives"
+      ],
+      "related_topics": [
+        "IndiaAI Mission",
+        "Innovation programs",
+        "Startup accelerators"
+      ],
+      "confidence": "high",
+      "language": "en"
+    },
+    "metadata": {
+      "agent_name": "Impact Saathi Agent",
+      "timestamp": "2026-10-09T12:30:00Z"
+    }
+  },
+  "raw_response": "{\n  \"status\": \"success\",\n  \"result\": {\n    \"answer\": \"At the India AI Impact Summit 2026, several funding opportunities are available for startups focused on artificial intelligence and related technologies. Startups can explore initiatives under the IndiaAI Mission that focus on innovation and technological advancement. The government has allocated significant funds for AI research and development, which includes grants, seed funding, and partnerships with industry leaders.\\n\\nAdditionally, there are specific programs and competitions like hackathons, accelerators, and incubators organized by state and central government departments aimed at fostering AI innovation. Startups may also find opportunities through collaborations with tech giants and investors present at the summit. \\n\\nIt is advisable for startups to check the detailed announcements made during the summit and keep an eye on the official website https://impact.indiaai.gov.in for the latest funding opportunities and application processes.\",\n    \"sources\": [\"Summit Schedule Documentation\", \"IndiaAI Mission Initiatives\"],\n    \"related_topics\": [\"IndiaAI Mission\", \"Innovation programs\", \"Startup accelerators\"],\n    \"confidence\": \"high\",\n    \"language\": \"en\"\n  },\n  \"metadata\": {\n    \"agent_name\": \"Impact Saathi Agent\",\n    \"timestamp\": \"2026-10-09T12:30:00Z\"\n  }\n}"
+}
