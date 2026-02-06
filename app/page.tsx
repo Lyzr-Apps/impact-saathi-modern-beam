@@ -28,6 +28,73 @@ interface Message {
   timestamp: Date
 }
 
+// Simple markdown formatter component
+function formatMarkdown(text: string) {
+  // Convert markdown to HTML-like React elements
+  const lines = text.split('\n')
+  const elements: JSX.Element[] = []
+  let listItems: string[] = []
+  let inList = false
+
+  lines.forEach((line, index) => {
+    // Handle numbered lists
+    if (line.match(/^\d+\.\s/)) {
+      const content = line.replace(/^\d+\.\s/, '')
+      listItems.push(content)
+      inList = true
+    } else if (inList && line.trim() === '') {
+      // End of list
+      elements.push(
+        <ol key={`list-${index}`} className="list-decimal list-inside space-y-1 ml-4 my-2">
+          {listItems.map((item, i) => (
+            <li key={i} className="leading-relaxed" dangerouslySetInnerHTML={{ __html: formatInlineMarkdown(item) }} />
+          ))}
+        </ol>
+      )
+      listItems = []
+      inList = false
+    } else if (inList) {
+      // Continue list item content
+      listItems[listItems.length - 1] += ' ' + line.trim()
+    } else if (line.trim().startsWith('**') && line.trim().endsWith('**')) {
+      // Subheading
+      const text = line.replace(/\*\*/g, '')
+      elements.push(<h3 key={index} className="font-bold text-lg mt-3 mb-1">{text}</h3>)
+    } else if (line.trim() === '') {
+      // Empty line
+      elements.push(<br key={index} />)
+    } else {
+      // Regular paragraph
+      elements.push(
+        <p key={index} className="leading-relaxed" dangerouslySetInnerHTML={{ __html: formatInlineMarkdown(line) }} />
+      )
+    }
+  })
+
+  // Handle remaining list items
+  if (listItems.length > 0) {
+    elements.push(
+      <ol key="list-final" className="list-decimal list-inside space-y-1 ml-4 my-2">
+        {listItems.map((item, i) => (
+          <li key={i} className="leading-relaxed" dangerouslySetInnerHTML={{ __html: formatInlineMarkdown(item) }} />
+        ))}
+      </ol>
+    )
+  }
+
+  return <div className="space-y-2">{elements}</div>
+}
+
+function formatInlineMarkdown(text: string): string {
+  // Convert **bold** to <strong>
+  let formatted = text.replace(/\*\*(.+?)\*\*/g, '<strong class="font-semibold">$1</strong>')
+  // Convert *italic* to <em>
+  formatted = formatted.replace(/\*(.+?)\*/g, '<em class="italic">$1</em>')
+  // Convert inline code
+  formatted = formatted.replace(/`(.+?)`/g, '<code class="bg-gray-100 px-1 rounded">$1</code>')
+  return formatted
+}
+
 // Language type
 type Language = 'en' | 'hi'
 
@@ -239,9 +306,9 @@ export default function Home() {
                   ) : (
                     <Card className="shadow-md border-gray-200">
                       <CardContent className="p-5">
-                        <p className="text-[#000080] whitespace-pre-wrap break-words leading-relaxed">
-                          {message.content}
-                        </p>
+                        <div className="text-[#000080] break-words">
+                          {formatMarkdown(message.content)}
+                        </div>
 
                         {/* Sources */}
                         {message.sources && message.sources.length > 0 && (
