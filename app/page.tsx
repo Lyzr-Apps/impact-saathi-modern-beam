@@ -1,22 +1,39 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import { useTheme } from 'next-themes'
 import { callAIAgent } from '@/lib/aiAgent'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
-import { Loader2, Send, History, Plus, Trash2, User } from 'lucide-react'
+import { ScrollArea } from '@/components/ui/scroll-area'
+import { Separator } from '@/components/ui/separator'
+import {
+  Loader2,
+  Send,
+  History,
+  Plus,
+  Trash2,
+  User,
+  Moon,
+  Sun,
+  Menu,
+  X,
+  Globe,
+  Database
+} from 'lucide-react'
 
 // Agent configuration
 const AGENT_ID = '69858ad2e17e33c11eed19f5'
 
-// TypeScript interfaces from actual agent response schema
+// TypeScript interfaces
 interface AgentResult {
   answer: string
   sources: string[]
   related_topics: string[]
   confidence: string
   language: string
+  information_source?: 'knowledge_base' | 'web_search' | 'combined'
 }
 
 interface Message {
@@ -25,27 +42,34 @@ interface Message {
   content: string
   sources?: string[]
   related_topics?: string[]
+  information_source?: string
   timestamp: Date
 }
 
-// Simple markdown formatter component
+interface ConversationMeta {
+  sessionId: string
+  title: string
+  lastUpdated: string
+  messageCount: number
+}
+
+type Language = 'en' | 'hi'
+
+// Markdown formatter
 function formatMarkdown(text: string) {
-  // Convert markdown to HTML-like React elements
   const lines = text.split('\n')
   const elements: JSX.Element[] = []
   let listItems: string[] = []
   let inList = false
 
   lines.forEach((line, index) => {
-    // Handle numbered lists
     if (line.match(/^\d+\.\s/)) {
       const content = line.replace(/^\d+\.\s/, '')
       listItems.push(content)
       inList = true
     } else if (inList && line.trim() === '') {
-      // End of list
       elements.push(
-        <ol key={`list-${index}`} className="list-decimal list-inside space-y-1 ml-4 my-2">
+        <ol key={`list-${index}`} className="list-decimal list-inside space-y-1.5 ml-4 my-3">
           {listItems.map((item, i) => (
             <li key={i} className="leading-relaxed" dangerouslySetInnerHTML={{ __html: formatInlineMarkdown(item) }} />
           ))}
@@ -54,27 +78,22 @@ function formatMarkdown(text: string) {
       listItems = []
       inList = false
     } else if (inList) {
-      // Continue list item content
       listItems[listItems.length - 1] += ' ' + line.trim()
     } else if (line.trim().startsWith('**') && line.trim().endsWith('**')) {
-      // Subheading
       const text = line.replace(/\*\*/g, '')
-      elements.push(<h3 key={index} className="font-bold text-lg mt-3 mb-1">{text}</h3>)
+      elements.push(<h3 key={index} className="font-bold text-lg mt-4 mb-2">{text}</h3>)
     } else if (line.trim() === '') {
-      // Empty line
       elements.push(<br key={index} />)
     } else {
-      // Regular paragraph
       elements.push(
         <p key={index} className="leading-relaxed" dangerouslySetInnerHTML={{ __html: formatInlineMarkdown(line) }} />
       )
     }
   })
 
-  // Handle remaining list items
   if (listItems.length > 0) {
     elements.push(
-      <ol key="list-final" className="list-decimal list-inside space-y-1 ml-4 my-2">
+      <ol key="list-final" className="list-decimal list-inside space-y-1.5 ml-4 my-3">
         {listItems.map((item, i) => (
           <li key={i} className="leading-relaxed" dangerouslySetInnerHTML={{ __html: formatInlineMarkdown(item) }} />
         ))}
@@ -86,58 +105,58 @@ function formatMarkdown(text: string) {
 }
 
 function formatInlineMarkdown(text: string): string {
-  // Convert **bold** to <strong>
   let formatted = text.replace(/\*\*(.+?)\*\*/g, '<strong class="font-semibold">$1</strong>')
-  // Convert *italic* to <em>
   formatted = formatted.replace(/\*(.+?)\*/g, '<em class="italic">$1</em>')
-  // Convert inline code
-  formatted = formatted.replace(/`(.+?)`/g, '<code class="bg-gray-100 px-1 rounded">$1</code>')
+  formatted = formatted.replace(/`(.+?)`/g, '<code class="bg-muted px-1.5 py-0.5 rounded text-sm">$1</code>')
   return formatted
 }
 
-// Language type
-type Language = 'en' | 'hi'
-
-// Translation strings
+// Translations
 const translations = {
   en: {
     title: 'Impact Saathi',
+    subtitle: 'Your AI Guide to India AI Impact Summit 2026',
     placeholder: 'Ask about the summit, speakers, or IndiaAI initiatives...',
     send: 'Send',
+    newChat: 'New Chat',
+    history: 'History',
     welcomeTitle: 'Welcome to Impact Saathi',
-    welcomeSubtitle: 'Your guide to India AI Impact Summit 2026',
+    welcomeSubtitle: 'Your intelligent guide to India AI Impact Summit 2026',
     suggestions: [
-      'Tell me about the schedule',
-      'Who are the speakers?',
-      'What is IndiaAI Mission?'
+      'Tell me about the summit schedule',
+      'Who are the confirmed speakers?',
+      'What is the IndiaAI Mission?'
     ],
-    basedOn: 'Based on:',
+    basedOn: 'Sources:',
     relatedTopics: 'Related topics:',
-    typing: 'Impact Saathi is typing'
+    typing: 'Impact Saathi is typing',
+    noConversations: 'No previous conversations',
+    conversationHistory: 'Conversation History',
+    attendee: 'Summit Attendee',
+    messages: 'messages'
   },
   hi: {
     title: 'इम्पैक्ट साथी',
+    subtitle: 'भारत AI इम्पैक्ट शिखर सम्मेलन 2026 के लिए आपका AI गाइड',
     placeholder: 'सम्मेलन, वक्ताओं या IndiaAI पहलों के बारे में पूछें...',
     send: 'भेजें',
+    newChat: 'नई चैट',
+    history: 'इतिहास',
     welcomeTitle: 'इम्पैक्ट साथी में आपका स्वागत है',
-    welcomeSubtitle: 'भारत AI इम्पैक्ट शिखर सम्मेलन 2026 के लिए आपका मार्गदर्शक',
+    welcomeSubtitle: 'भारत AI इम्पैक्ट शिखर सम्मेलन 2026 के लिए आपका बुद्धिमान मार्गदर्शक',
     suggestions: [
       'मुझे कार्यक्रम के बारे में बताएं',
-      'वक्ता कौन हैं?',
+      'पुष्ट वक्ता कौन हैं?',
       'IndiaAI मिशन क्या है?'
     ],
-    basedOn: 'आधारित:',
+    basedOn: 'स्रोत:',
     relatedTopics: 'संबंधित विषय:',
-    typing: 'इम्पैक्ट साथी टाइप कर रहा है'
+    typing: 'इम्पैक्ट साथी टाइप कर रहा है',
+    noConversations: 'कोई पिछली बातचीत नहीं',
+    conversationHistory: 'बातचीत का इतिहास',
+    attendee: 'शिखर सम्मेलन में उपस्थित',
+    messages: 'संदेश'
   }
-}
-
-// Conversation metadata interface
-interface ConversationMeta {
-  sessionId: string
-  title: string
-  lastUpdated: string
-  messageCount: number
 }
 
 export default function Home() {
@@ -149,10 +168,16 @@ export default function Home() {
   const [sessionId, setSessionId] = useState(() => `session-${Date.now()}`)
   const [showHistory, setShowHistory] = useState(false)
   const [conversations, setConversations] = useState<ConversationMeta[]>([])
+  const [mounted, setMounted] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+  const { theme, setTheme } = useTheme()
 
   const t = translations[language]
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
 
   // Load conversations list
   const loadConversations = () => {
@@ -187,9 +212,7 @@ export default function Home() {
       convos.unshift(meta)
     }
 
-    // Keep only last 50 conversations
     convos = convos.slice(0, 50)
-
     localStorage.setItem('impact_saathi_conversations', JSON.stringify(convos))
     setConversations(convos)
   }
@@ -235,9 +258,8 @@ export default function Home() {
     setShowHistory(false)
   }
 
-  // Initialize user and load preferences on mount
+  // Initialize user and load preferences
   useEffect(() => {
-    // Get or create user ID
     let storedUserId = localStorage.getItem('impact_saathi_user_id')
     if (!storedUserId) {
       storedUserId = `user-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
@@ -245,16 +267,13 @@ export default function Home() {
     }
     setUserId(storedUserId)
 
-    // Load saved language preference
     const savedLanguage = localStorage.getItem('impact_saathi_language') as Language | null
     if (savedLanguage && (savedLanguage === 'en' || savedLanguage === 'hi')) {
       setLanguage(savedLanguage)
     }
 
-    // Load conversations list
     loadConversations()
 
-    // Load chat history for this session
     const savedMessages = localStorage.getItem(`impact_saathi_chat_${sessionId}`)
     if (savedMessages) {
       try {
@@ -269,28 +288,26 @@ export default function Home() {
     }
   }, [sessionId])
 
-  // Save chat history whenever messages change
+  // Save chat history
   useEffect(() => {
     if (messages.length > 0) {
       localStorage.setItem(`impact_saathi_chat_${sessionId}`, JSON.stringify(messages))
-
-      // Save conversation metadata
       const firstUserMessage = messages.find(m => m.role === 'user')?.content
       saveConversationMeta(sessionId, messages.length, firstUserMessage)
     }
   }, [messages, sessionId])
 
-  // Save language preference when changed
+  // Save language preference
   useEffect(() => {
     localStorage.setItem('impact_saathi_language', language)
   }, [language])
 
-  // Auto-scroll to latest message
+  // Auto-scroll
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, isLoading])
 
-  // Focus input on mount
+  // Focus input
   useEffect(() => {
     inputRef.current?.focus()
   }, [])
@@ -299,16 +316,13 @@ export default function Home() {
     const text = messageText || input.trim()
     if (!text || isLoading || !userId) return
 
-    // Clear input
     setInput('')
 
-    // Add language instruction to message if Hindi is selected
     const languageInstruction = language === 'hi'
       ? '\n\n[Please respond in Hindi language]'
       : ''
     const messageWithLanguage = text + languageInstruction
 
-    // Add user message (display original text without instruction)
     const userMessage: Message = {
       id: `user-${Date.now()}`,
       role: 'user',
@@ -319,7 +333,6 @@ export default function Home() {
     setIsLoading(true)
 
     try {
-      // Call agent with user_id and session_id
       const result = await callAIAgent(messageWithLanguage, AGENT_ID, {
         user_id: userId,
         session_id: sessionId
@@ -328,18 +341,17 @@ export default function Home() {
       if (result.success && result.response.status === 'success') {
         const agentResult = result.response.result as AgentResult
 
-        // Add assistant message
         const assistantMessage: Message = {
           id: `assistant-${Date.now()}`,
           role: 'assistant',
           content: agentResult.answer || 'No response available',
           sources: agentResult.sources || [],
           related_topics: agentResult.related_topics || [],
+          information_source: agentResult.information_source,
           timestamp: new Date()
         }
         setMessages(prev => [...prev, assistantMessage])
       } else {
-        // Error handling
         const errorMessage: Message = {
           id: `assistant-${Date.now()}`,
           role: 'assistant',
@@ -349,7 +361,6 @@ export default function Home() {
         setMessages(prev => [...prev, errorMessage])
       }
     } catch (error) {
-      // Network error handling
       const errorMessage: Message = {
         id: `assistant-${Date.now()}`,
         role: 'assistant',
@@ -381,271 +392,351 @@ export default function Home() {
     })
   }
 
+  if (!mounted) return null
+
   return (
-    <div className="min-h-screen flex flex-col bg-white">
+    <div className="min-h-screen flex flex-col bg-background">
       {/* Fixed Header */}
-      <header className="fixed top-0 left-0 right-0 z-10 bg-white border-b border-gray-200 shadow-sm">
-        <div className="max-w-4xl mx-auto px-4 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            {/* History Toggle */}
-            <Button
-              onClick={() => setShowHistory(!showHistory)}
-              variant="ghost"
-              size="sm"
-              className="text-[#000080] hover:bg-orange-50"
-            >
-              <History className="w-5 h-5" />
-            </Button>
+      <header className="sticky top-0 z-10 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+        <div className="container max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex h-16 items-center justify-between gap-4">
+            {/* Left Section */}
+            <div className="flex items-center gap-2 sm:gap-3">
+              {/* Mobile History Toggle */}
+              <Button
+                onClick={() => setShowHistory(!showHistory)}
+                variant="ghost"
+                size="icon"
+                className="lg:hidden"
+              >
+                {showHistory ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+              </Button>
 
-            <div className="w-10 h-10 bg-gradient-to-br from-[#FF9933] to-[#FF6600] rounded-lg flex items-center justify-center">
-              <span className="text-white font-bold text-xl">IS</span>
+              {/* Desktop History Toggle */}
+              <Button
+                onClick={() => setShowHistory(!showHistory)}
+                variant="ghost"
+                size="icon"
+                className="hidden lg:flex"
+              >
+                <History className="h-5 w-5" />
+              </Button>
+
+              {/* Logo and Title */}
+              <div className="flex items-center gap-2 sm:gap-3">
+                <div className="w-10 h-10 bg-gradient-to-br from-orange-500 to-orange-600 dark:from-orange-600 dark:to-orange-700 rounded-lg flex items-center justify-center shadow-lg">
+                  <span className="text-white font-bold text-xl">IS</span>
+                </div>
+                <div className="hidden sm:block">
+                  <h1 className="text-lg sm:text-xl font-bold text-foreground">{t.title}</h1>
+                  <p className="text-xs text-muted-foreground hidden md:block">{t.subtitle}</p>
+                </div>
+              </div>
             </div>
-            <h1 className="text-2xl font-bold text-[#000080]">{t.title}</h1>
-          </div>
 
-          <div className="flex items-center gap-2">
-            {/* New Chat Button */}
-            <Button
-              onClick={startNewConversation}
-              variant="ghost"
-              size="sm"
-              className="text-[#000080] hover:bg-orange-50"
-            >
-              <Plus className="w-5 h-5" />
-            </Button>
+            {/* Right Section */}
+            <div className="flex items-center gap-1 sm:gap-2">
+              {/* New Chat */}
+              <Button
+                onClick={startNewConversation}
+                variant="ghost"
+                size="icon"
+                className="hidden sm:flex"
+              >
+                <Plus className="h-5 w-5" />
+              </Button>
 
-            {/* Language Toggle */}
-            <Button
-              onClick={toggleLanguage}
-              variant="outline"
-              size="sm"
-              className="font-semibold border-[#FF9933] text-[#000080] hover:bg-[#FF9933] hover:text-white transition-colors"
-            >
-              {language === 'en' ? 'हिं' : 'EN'}
-            </Button>
+              {/* Language Toggle */}
+              <Button
+                onClick={toggleLanguage}
+                variant="outline"
+                size="sm"
+                className="font-semibold"
+              >
+                {language === 'en' ? 'हिं' : 'EN'}
+              </Button>
+
+              {/* Theme Toggle */}
+              <Button
+                onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+                variant="ghost"
+                size="icon"
+              >
+                {theme === 'dark' ? (
+                  <Sun className="h-5 w-5" />
+                ) : (
+                  <Moon className="h-5 w-5" />
+                )}
+              </Button>
+            </div>
           </div>
         </div>
       </header>
 
-      {/* History Sidebar */}
-      {showHistory && (
-        <div className="fixed top-16 left-0 bottom-0 w-80 bg-white border-r border-gray-200 shadow-lg z-20 overflow-y-auto">
-          <div className="p-4">
-            {/* User Profile Info */}
-            <div className="mb-6 pb-4 border-b border-gray-200">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-gradient-to-br from-[#FF9933] to-[#FF6600] rounded-full flex items-center justify-center">
-                  <User className="w-5 h-5 text-white" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-[#000080]">Summit Attendee</p>
-                  <p className="text-xs text-gray-500 truncate">ID: {userId.substring(0, 20)}...</p>
-                </div>
-              </div>
-            </div>
-
-            <h2 className="text-lg font-bold text-[#000080] mb-4">Conversation History</h2>
-            {conversations.length === 0 ? (
-              <p className="text-gray-500 text-sm">No previous conversations</p>
-            ) : (
-              <div className="space-y-2">
-                {conversations.map((conv) => (
-                  <div
-                    key={conv.sessionId}
-                    className={`p-3 rounded-lg border cursor-pointer hover:bg-orange-50 transition-colors ${
-                      conv.sessionId === sessionId ? 'border-[#FF9933] bg-orange-50' : 'border-gray-200'
-                    }`}
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div
-                        onClick={() => loadConversation(conv.sessionId)}
-                        className="flex-1 min-w-0"
-                      >
-                        <p className="text-sm font-medium text-[#000080] truncate">
-                          {conv.title}
-                        </p>
-                        <p className="text-xs text-gray-500 mt-1">
-                          {conv.messageCount} messages • {new Date(conv.lastUpdated).toLocaleDateString()}
+      <div className="flex flex-1 overflow-hidden">
+        {/* History Sidebar */}
+        {showHistory && (
+          <aside className="w-full lg:w-80 border-r bg-background overflow-hidden flex flex-col absolute lg:relative inset-0 z-20 lg:z-0">
+            <ScrollArea className="flex-1">
+              <div className="p-4 space-y-4">
+                {/* User Profile */}
+                <Card>
+                  <CardContent className="p-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-gradient-to-br from-orange-500 to-orange-600 dark:from-orange-600 dark:to-orange-700 rounded-full flex items-center justify-center">
+                        <User className="w-5 h-5 text-white" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold">{t.attendee}</p>
+                        <p className="text-xs text-muted-foreground truncate">
+                          ID: {userId.substring(0, 20)}...
                         </p>
                       </div>
-                      <Button
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          deleteConversation(conv.sessionId)
-                        }}
-                        variant="ghost"
-                        size="sm"
-                        className="text-red-500 hover:bg-red-50 p-1 h-auto"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Main Chat Area */}
-      <main className="flex-1 mt-16 mb-24 overflow-y-auto">
-        <div className="max-w-4xl mx-auto px-4 py-6">
-          {/* Welcome Card */}
-          {messages.length === 0 && (
-            <Card className="mb-6 border-[#FF9933] shadow-lg">
-              <CardContent className="pt-6">
-                <div className="text-center mb-6">
-                  <h2 className="text-2xl font-bold text-[#000080] mb-2">
-                    {t.welcomeTitle}
-                  </h2>
-                  <p className="text-gray-600">
-                    {t.welcomeSubtitle}
-                  </p>
-                </div>
-
-                {/* Quick Start Suggestions */}
-                <div className="space-y-3">
-                  {t.suggestions.map((suggestion, index) => (
-                    <button
-                      key={index}
-                      onClick={() => handleSendMessage(suggestion)}
-                      className="w-full text-left px-4 py-3 rounded-lg border border-gray-200 hover:border-[#FF9933] hover:bg-orange-50 transition-all text-[#000080] font-medium"
-                      disabled={isLoading}
-                    >
-                      {suggestion}
-                    </button>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Messages */}
-          <div className="space-y-4">
-            {messages.map((message) => (
-              <div
-                key={message.id}
-                className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
-              >
-                <div className={`max-w-[85%] ${message.role === 'user' ? 'ml-auto' : 'mr-auto'}`}>
-                  {/* Message Bubble */}
-                  {message.role === 'user' ? (
-                    <div className="bg-[#3B82F6] text-white rounded-2xl rounded-tr-sm px-5 py-3 shadow-md">
-                      <p className="whitespace-pre-wrap break-words">{message.content}</p>
-                      <p className="text-xs text-blue-100 mt-1 opacity-75">
-                        {formatTime(message.timestamp)}
-                      </p>
-                    </div>
-                  ) : (
-                    <Card className="shadow-md border-gray-200">
-                      <CardContent className="p-5">
-                        <div className="text-[#000080] break-words">
-                          {formatMarkdown(message.content)}
-                        </div>
-
-                        {/* Sources */}
-                        {message.sources && message.sources.length > 0 && (
-                          <div className="mt-4 pt-3 border-t border-gray-200">
-                            <p className="text-xs font-semibold text-gray-600 mb-2">
-                              {t.basedOn}
-                            </p>
-                            <div className="flex flex-wrap gap-2">
-                              {message.sources.map((source, idx) => (
-                                <span
-                                  key={idx}
-                                  className="text-xs px-2 py-1 bg-orange-50 text-[#FF9933] rounded border border-[#FF9933]"
-                                >
-                                  {source}
-                                </span>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Related Topics Chips */}
-                        {message.related_topics && message.related_topics.length > 0 && (
-                          <div className="mt-4">
-                            <p className="text-xs font-semibold text-gray-600 mb-2">
-                              {t.relatedTopics}
-                            </p>
-                            <div className="flex flex-wrap gap-2">
-                              {message.related_topics.map((topic, idx) => (
-                                <button
-                                  key={idx}
-                                  onClick={() => handleSendMessage(topic)}
-                                  disabled={isLoading}
-                                  className="text-sm px-3 py-1.5 bg-white border border-[#FF9933] text-[#FF9933] rounded-full hover:bg-[#FF9933] hover:text-white transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-                                >
-                                  {topic}
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-
-                        <p className="text-xs text-gray-400 mt-2">
-                          {formatTime(message.timestamp)}
-                        </p>
-                      </CardContent>
-                    </Card>
-                  )}
-                </div>
-              </div>
-            ))}
-
-            {/* Typing Indicator */}
-            {isLoading && (
-              <div className="flex justify-start">
-                <Card className="shadow-md border-gray-200 max-w-[85%]">
-                  <CardContent className="p-5">
-                    <div className="flex items-center gap-2 text-gray-500">
-                      <div className="flex gap-1">
-                        <span className="w-2 h-2 bg-[#FF9933] rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></span>
-                        <span className="w-2 h-2 bg-[#FF9933] rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></span>
-                        <span className="w-2 h-2 bg-[#FF9933] rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></span>
-                      </div>
-                      <span className="text-sm">{t.typing}</span>
                     </div>
                   </CardContent>
                 </Card>
+
+                <Separator />
+
+                {/* Conversation History */}
+                <div>
+                  <h2 className="text-lg font-bold mb-3">{t.conversationHistory}</h2>
+                  {conversations.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">{t.noConversations}</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {conversations.map((conv) => (
+                        <Card
+                          key={conv.sessionId}
+                          className={`cursor-pointer transition-colors hover:bg-accent ${
+                            conv.sessionId === sessionId ? 'border-orange-500 bg-accent' : ''
+                          }`}
+                        >
+                          <CardContent className="p-3">
+                            <div className="flex items-start justify-between gap-2">
+                              <div
+                                onClick={() => loadConversation(conv.sessionId)}
+                                className="flex-1 min-w-0"
+                              >
+                                <p className="text-sm font-medium truncate">
+                                  {conv.title}
+                                </p>
+                                <p className="text-xs text-muted-foreground mt-1">
+                                  {conv.messageCount} {t.messages} • {new Date(conv.lastUpdated).toLocaleDateString()}
+                                </p>
+                              </div>
+                              <Button
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  deleteConversation(conv.sessionId)
+                                }}
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-destructive hover:bg-destructive/10"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
-            )}
-          </div>
+            </ScrollArea>
+          </aside>
+        )}
 
-          <div ref={messagesEndRef} />
-        </div>
-      </main>
+        {/* Main Chat Area */}
+        <main className="flex-1 flex flex-col overflow-hidden">
+          <ScrollArea className="flex-1 px-4 py-6">
+            <div className="container max-w-4xl mx-auto space-y-6">
+              {/* Welcome Card */}
+              {messages.length === 0 && (
+                <Card className="border-orange-500/50">
+                  <CardContent className="p-6 sm:p-8">
+                    <div className="text-center mb-6">
+                      <h2 className="text-2xl sm:text-3xl font-bold mb-2">
+                        {t.welcomeTitle}
+                      </h2>
+                      <p className="text-muted-foreground">
+                        {t.welcomeSubtitle}
+                      </p>
+                    </div>
 
-      {/* Fixed Input Footer */}
-      <footer className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-lg">
-        <div className="max-w-4xl mx-auto px-4 py-4">
-          <div className="flex gap-2">
-            <Input
-              ref={inputRef}
-              type="text"
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyPress={handleKeyPress}
-              placeholder={t.placeholder}
-              disabled={isLoading}
-              className="flex-1 border-gray-300 focus:border-[#FF9933] focus:ring-[#FF9933] text-[#000080] placeholder:text-gray-400"
-            />
-            <Button
-              onClick={() => handleSendMessage()}
-              disabled={!input.trim() || isLoading}
-              className="bg-[#FF9933] hover:bg-[#FF6600] text-white px-6 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isLoading ? (
-                <Loader2 className="w-5 h-5 animate-spin" />
-              ) : (
-                <Send className="w-5 h-5" />
+                    <div className="grid gap-3">
+                      {t.suggestions.map((suggestion, index) => (
+                        <button
+                          key={index}
+                          onClick={() => handleSendMessage(suggestion)}
+                          className="w-full text-left px-4 py-3 rounded-lg border border-border hover:border-orange-500 hover:bg-accent transition-all font-medium text-sm sm:text-base"
+                          disabled={isLoading}
+                        >
+                          {suggestion}
+                        </button>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
               )}
-              <span className="ml-2 hidden sm:inline">{t.send}</span>
-            </Button>
+
+              {/* Messages */}
+              {messages.map((message) => (
+                <div
+                  key={message.id}
+                  className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                >
+                  <div className={`max-w-[90%] sm:max-w-[85%] ${message.role === 'user' ? 'ml-auto' : 'mr-auto'}`}>
+                    {message.role === 'user' ? (
+                      <div className="bg-primary text-primary-foreground rounded-2xl rounded-tr-sm px-4 sm:px-5 py-3 shadow-md">
+                        <p className="whitespace-pre-wrap break-words text-sm sm:text-base">
+                          {message.content}
+                        </p>
+                        <p className="text-xs mt-1 opacity-75">
+                          {formatTime(message.timestamp)}
+                        </p>
+                      </div>
+                    ) : (
+                      <Card>
+                        <CardContent className="p-4 sm:p-5">
+                          <div className="break-words text-sm sm:text-base">
+                            {formatMarkdown(message.content)}
+                          </div>
+
+                          {/* Information Source Badge */}
+                          {message.information_source && (
+                            <div className="mt-3 flex items-center gap-2 text-xs">
+                              {message.information_source === 'web_search' && (
+                                <span className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-full">
+                                  <Globe className="w-3 h-3" />
+                                  Web Search
+                                </span>
+                              )}
+                              {message.information_source === 'knowledge_base' && (
+                                <span className="inline-flex items-center gap-1 px-2 py-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 rounded-full">
+                                  <Database className="w-3 h-3" />
+                                  Knowledge Base
+                                </span>
+                              )}
+                              {message.information_source === 'combined' && (
+                                <>
+                                  <span className="inline-flex items-center gap-1 px-2 py-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 rounded-full">
+                                    <Database className="w-3 h-3" />
+                                    KB
+                                  </span>
+                                  <span className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-full">
+                                    <Globe className="w-3 h-3" />
+                                    Web
+                                  </span>
+                                </>
+                              )}
+                            </div>
+                          )}
+
+                          {/* Sources */}
+                          {message.sources && message.sources.length > 0 && (
+                            <div className="mt-4 pt-3 border-t">
+                              <p className="text-xs font-semibold text-muted-foreground mb-2">
+                                {t.basedOn}
+                              </p>
+                              <div className="flex flex-wrap gap-2">
+                                {message.sources.map((source, idx) => (
+                                  <span
+                                    key={idx}
+                                    className="text-xs px-2 py-1 bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300 rounded border border-orange-200 dark:border-orange-800"
+                                  >
+                                    {source}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Related Topics */}
+                          {message.related_topics && message.related_topics.length > 0 && (
+                            <div className="mt-4">
+                              <p className="text-xs font-semibold text-muted-foreground mb-2">
+                                {t.relatedTopics}
+                              </p>
+                              <div className="flex flex-wrap gap-2">
+                                {message.related_topics.map((topic, idx) => (
+                                  <button
+                                    key={idx}
+                                    onClick={() => handleSendMessage(topic)}
+                                    disabled={isLoading}
+                                    className="text-sm px-3 py-1.5 border border-orange-500 text-orange-600 dark:text-orange-400 rounded-full hover:bg-orange-500 hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                  >
+                                    {topic}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          <p className="text-xs text-muted-foreground mt-3">
+                            {formatTime(message.timestamp)}
+                          </p>
+                        </CardContent>
+                      </Card>
+                    )}
+                  </div>
+                </div>
+              ))}
+
+              {/* Typing Indicator */}
+              {isLoading && (
+                <div className="flex justify-start">
+                  <Card className="max-w-[85%]">
+                    <CardContent className="p-4 sm:p-5">
+                      <div className="flex items-center gap-2 text-muted-foreground">
+                        <div className="flex gap-1">
+                          <span className="w-2 h-2 bg-orange-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></span>
+                          <span className="w-2 h-2 bg-orange-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></span>
+                          <span className="w-2 h-2 bg-orange-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></span>
+                        </div>
+                        <span className="text-sm">{t.typing}</span>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+              )}
+
+              <div ref={messagesEndRef} />
+            </div>
+          </ScrollArea>
+
+          {/* Input Footer */}
+          <div className="border-t bg-background p-4">
+            <div className="container max-w-4xl mx-auto">
+              <div className="flex gap-2">
+                <Input
+                  ref={inputRef}
+                  type="text"
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyPress={handleKeyPress}
+                  placeholder={t.placeholder}
+                  disabled={isLoading}
+                  className="flex-1"
+                />
+                <Button
+                  onClick={() => handleSendMessage()}
+                  disabled={!input.trim() || isLoading}
+                  className="bg-orange-500 hover:bg-orange-600 text-white px-4 sm:px-6"
+                >
+                  {isLoading ? (
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                  ) : (
+                    <Send className="w-5 h-5" />
+                  )}
+                  <span className="ml-2 hidden sm:inline">{t.send}</span>
+                </Button>
+              </div>
+            </div>
           </div>
-        </div>
-      </footer>
+        </main>
+      </div>
     </div>
   )
 }

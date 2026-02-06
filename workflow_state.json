@@ -17,7 +17,7 @@
       "name": "Impact Saathi Agent",
       "agent_id": "69858ad2e17e33c11eed19f5",
       "type": "single",
-      "model": "gpt-4o",
+      "model": "gpt-4.1",
       "provider": "OpenAI",
       "temperature": 0.3,
       "top_p": 0.9,
@@ -25,9 +25,11 @@
       "rag_id": "69858abede7de278e55d2856",
       "tools": [
         "KNOWLEDGE_BASE",
-        "COMPOSIO_SEARCH_PERPLEXITY_AI_SEARCH"
+        "PERPLEXITYAI_SEARCH"
       ],
-      "response_schema": "response_schemas/impact_saathi_agent_response.json"
+      "response_schema": "response_schemas/impact_saathi_agent_response.json",
+      "last_updated": "2026-02-06T00:00:00Z",
+      "update_notes": "Updated to gpt-4.1 model with enhanced web search capabilities using Perplexity"
     }
   ]
 }
